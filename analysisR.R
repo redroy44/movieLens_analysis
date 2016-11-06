@@ -25,6 +25,7 @@ suffix <- ".csv"
 for (f in dataset_files) {
   path <- file.path(data_folder, dataset, paste0(f, suffix))
   assign(f, read.csv(path, header = T, stringsAsFactors = F))
+  print(object.size(f),units="Gb")
 }
 
 # Clean ratings
@@ -42,7 +43,7 @@ movies <-movies %>%
   select(-title_tmp) # drop title1 column
 
 # Check NA's
-movies %>%
+na_movies <- movies %>%
   filter(is.na(title) | is.na(year)) %>%
   print
 
