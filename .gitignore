@@ -27,3 +27,4 @@ vignettes/*.pdf
 data/
 *.html
 .DS_Store
+.Rproj.user
