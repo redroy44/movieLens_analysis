@@ -66,21 +66,41 @@ na_movies <- movies_df %>%
 tags_df <- tbl_df(tags) %>%
   mutate(timestamp = as_datetime(timestamp))
 
+
+# Q1 ----------------------------------------------------------------------
+
 # Genres popularity per year
 genres_popularity <- movies_df %>%
   na.omit() %>%
   select(movieId, year, genres) %>%
   separate_rows(genres, sep = "\\|") %>%
   group_by(year, genres) %>%
-  summarise(number = n()) 
+  summarise(number = n())
 
+# TODO turn to ggvis!
 genres_popularity %>%
   filter(year > 1950) %>%
   ggplot(aes(x = year, y = number)) +
     geom_line(aes(group=genres, color=genres))
-  
 
 
+# Q2 ----------------------------------------------------------------------
+
+# Tags for genres
+genres_tags <- movies_df %>%
+  na.omit() %>%
+  select(movieId, year, genres) %>%
+  separate_rows(genres, sep = "\\|") %>%
+  left_join(tags_df, by = "movieId") %>%
+  na.omit() %>%
+  select(genres, tag) %>%
+  group_by(genres) %>% 
+  summarize(tag_list=unique(list(tag)))
+
+# tidy_books %>%
+#   anti_join(stop_words) %>%
+#   count(word) %>%
+#   with(wordcloud(word, n, max.words = 100))
 
 
 
