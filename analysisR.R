@@ -81,12 +81,9 @@ movies_per_year <- movies_df %>%
   group_by(year) %>%
   summarise(count = n())
 
-#TODO fill missing years
-years <- data_frame(year = min(movies_per_year$year):max(movies_per_year$year))
-
+# fill missing years
 movies_per_year <- movies_per_year %>%
-  right_join(years, by = "year") %>%
-  replace_na(list(count = 0))
+  complete(year = full_seq(year, 1), fill = list(count = 0))
 
 # TODO turn to ggvis!
 movies_per_year %>%
@@ -102,14 +99,26 @@ genres_popularity <- movies_df %>%
   na.omit() %>%
   select(movieId, year, genres) %>%
   separate_rows(genres, sep = "\\|") %>%
+  mutate(genres = as.factor(genres)) %>%
   group_by(year, genres) %>%
-  summarise(number = n())
+  summarise(number = n()) %>%
+  complete(year = full_seq(year, 1), genres, fill = list(number = 0))
+
+# Most popular genres
+genres_top <- genres_popularity %>%
+  group_by(genres) %>%
+  summarise(number = sum(number)) %>%
+  arrange(desc(number)) %>%
+  top_n(10, number)
+  
 
 # TODO turn to ggvis!
 genres_popularity %>%
-  filter(year > 1950) %>%
+  filter(year > 1930) %>%
+  filter(genres %in% genres_top$genres) %>%
   ggplot(aes(x = year, y = number)) +
-    geom_line(aes(group=genres, color=genres))
+    geom_area(aes(fill=genres), position = "fill") + 
+    scale_fill_brewer(palette = "Paired") 
 
 
 # Q2 ----------------------------------------------------------------------
