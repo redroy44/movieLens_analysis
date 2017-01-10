@@ -82,10 +82,15 @@ movies_per_year <- movies_df %>%
   summarise(count = n())
 
 #TODO fill missing years
+years <- data_frame(year = min(movies_per_year$year):max(movies_per_year$year))
+
+movies_per_year <- movies_per_year %>%
+  right_join(years, by = "year") %>%
+  replace_na(list(count = 0))
 
 # TODO turn to ggvis!
 movies_per_year %>%
-  filter(year > 2010) %>%
+  #filter(year > 2010) %>%
   ggplot(aes(x = year, y = count)) +
   geom_line(color="blue")
 
