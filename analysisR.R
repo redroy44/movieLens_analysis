@@ -108,7 +108,7 @@ genres_tags <- movies_df %>%
 
 genres_tags1 <- genres_tags %>%
   group_by(genres) %>%
-  mutate(dupa = )
+  mutate(dupa = 1)
 
 # tidy_books %>%
 #   anti_join(stop_words) %>%
@@ -153,7 +153,36 @@ best_per_decade <- avg_rating %>%
 
 
 
+# Q4 ----------------------------------------------------------------------
 
+avg_rating <- ratings_df %>%
+  inner_join(movies_df, by = "movieId") %>%
+  na.omit() %>%
+  select(movieId, title, rating, year) %>%
+  group_by(movieId, title, year) %>%
+  summarise(count = n(), mean = mean(rating), min = min(rating), max = max(rating)) %>%
+  ungroup() %>%
+  arrange(count, desc(mean))
+
+genres_rating <- movies_df %>%
+  na.omit() %>%
+  select(movieId, year, genres) %>%
+  inner_join(ratings_df, by = "movieId") %>%
+  select(-timestamp, -userId) %>%
+  mutate(decade = year  %/% 10 * 10) %>%
+  separate_rows(genres, sep = "\\|") %>%
+  group_by(year, genres) %>%
+  summarise(count = n(), avg_rating = mean(rating)) %>%
+  ungroup() %>%
+  mutate(score = ci_lower(avg_rating/5, count, 0.95))# %>%
+  arrange(year)
+
+# TODO turn to ggvis!
+genres_rating %>%
+  ggplot(aes(x = year, y = score)) +
+    geom_line(aes(group=genres, color=genres)) +
+    geom_smooth(aes(group=genres, color=genres)) +
+    facet_wrap(~genres)
 
 
 
