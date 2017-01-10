@@ -1,15 +1,19 @@
 # Load the packages -------------------------------------------------------
 library(checkpoint)
-checkpoint("2016-11-15")
+checkpoint("2016-11-15", auto.install.knitr=T)
 library(tidyverse)
 library(lubridate)
 library(stringr)
 library(rvest)
 library(tidytext)
+library(tm)
 library(wordcloud)
 library(doMC)
 registerDoMC(cores = 8)
 set.seed(29082012)
+
+# Print Version Information
+version
 
 
 # Load the data -----------------------------------------------------------
@@ -45,7 +49,7 @@ for (f in dataset_files) {
 
 # Clean ratings
 ratings_df <- tbl_df(ratings) %>%
-  mutate(rating = as.factor(rating), timestamp = as_datetime(timestamp))
+  mutate(timestamp = as_datetime(timestamp))
 
 # Clean movies
 movies_df <- tbl_df(movies)
@@ -65,6 +69,12 @@ na_movies <- movies_df %>%
 # Clean tags
 tags_df <- tbl_df(tags) %>%
   mutate(timestamp = as_datetime(timestamp))
+
+
+
+# Q0 ----------------------------------------------------------------------
+# Number of movies per year/decade
+
 
 
 # Q1 ----------------------------------------------------------------------
@@ -91,16 +101,66 @@ genres_tags <- movies_df %>%
   na.omit() %>%
   select(movieId, year, genres) %>%
   separate_rows(genres, sep = "\\|") %>%
-  left_join(tags_df, by = "movieId") %>%
-  na.omit() %>%
+  inner_join(tags_df, by = "movieId") %>%
   select(genres, tag) %>%
   group_by(genres) %>% 
-  summarize(tag_list=unique(list(tag)))
+  summarise(tag_list=unique(list(tag)))
+
+genres_tags1 <- genres_tags %>%
+  group_by(genres) %>%
+  mutate(dupa = )
 
 # tidy_books %>%
 #   anti_join(stop_words) %>%
 #   count(word) %>%
 #   with(wordcloud(word, n, max.words = 100))
+
+
+# Q3 ----------------------------------------------------------------------
+
+# average rating for a movie
+
+avg_rating <- ratings_df %>%
+  inner_join(movies_df, by = "movieId") %>%
+  na.omit() %>%
+  select(movieId, title, rating, year) %>%
+  group_by(movieId, title, year) %>%
+  summarise(count = n(), mean = mean(rating), min = min(rating), max = max(rating)) %>%
+  ungroup() %>%
+  arrange(count, desc(mean))
+
+# Lower bound of Wilson score confidence interval for a Bernoulli parameter
+# http://www.evanmiller.org/how-not-to-sort-by-average-rating.html
+# movies with the same mean but more reviews get higher score
+ci_lower <- function(pos, n, confidence) {
+  z = qnorm(1-(1-confidence)/2)
+  phat = pos
+  return (phat + z*z/(2*n) - z * sqrt((phat*(1-phat)+z*z/(4*n))/n))/(1+z*z/n)
+}
+
+avg_rating <- avg_rating %>%
+  mutate(score = ci_lower(mean/5, count, 0.95)) %>%
+  arrange(desc(score))
+
+# find best movie of a decade based on score
+# heavily dependent on the number of reviews
+best_per_decade <- avg_rating %>%
+  filter(count > 2) %>% # at least the median number of reviews (3)
+  mutate(decade = year  %/% 10 * 10) %>%
+  arrange(year, desc(score)) %>%
+  group_by(decade) %>%
+  summarise(title = first(title), score = first(score), mean = first(mean), count = first(count))
+
+
+
+
+
+
+
+
+
+
+
 
 
 
