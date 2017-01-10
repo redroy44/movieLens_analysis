@@ -70,11 +70,24 @@ na_movies <- movies_df %>%
 tags_df <- tbl_df(tags) %>%
   mutate(timestamp = as_datetime(timestamp))
 
+summary(movies_df)
 
 
 # Q0 ----------------------------------------------------------------------
 # Number of movies per year/decade
+movies_per_year <- movies_df %>%
+  na.omit() %>%
+  select(movieId, year) %>%
+  group_by(year) %>%
+  summarise(count = n())
 
+#TODO fill missing years
+
+# TODO turn to ggvis!
+movies_per_year %>%
+  filter(year > 2010) %>%
+  ggplot(aes(x = year, y = count)) +
+  geom_line(color="blue")
 
 
 # Q1 ----------------------------------------------------------------------
@@ -150,7 +163,6 @@ best_per_decade <- avg_rating %>%
   arrange(year, desc(score)) %>%
   group_by(decade) %>%
   summarise(title = first(title), score = first(score), mean = first(mean), count = first(count))
-
 
 
 # Q4 ----------------------------------------------------------------------
