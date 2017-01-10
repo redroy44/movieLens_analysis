@@ -1,7 +1,5 @@
-# R_Project
+# Analysis of MovieLens dataset
 
-Example questions:
-movie genres popularity by year
-most active users in rating/tagging
+The dataset [homepage](http://grouplens.org/datasets/movielens/).
 
-cross Ratings with Oscar winners
+NOTE: The script automatically downloads and unzips the dataset.
