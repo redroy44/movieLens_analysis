@@ -15,7 +15,6 @@ set.seed(29082012)
 # Print Version Information
 version
 
-
 # Load the data -----------------------------------------------------------
 
 url <- "http://files.grouplens.org/datasets/movielens/"
@@ -213,6 +212,8 @@ genres_rating %>%
 
 
 # Web Scraping ------------------------------------------------------------
+# source utility functions
+source(file = "functions.R")
 
 imdb_url = "http://www.imdb.com/title/tt"
 
@@ -221,72 +222,21 @@ imdb_df <- movies_df %>%
   select(-tmdbId) %>%
   mutate(link = paste0(imdb_url, imdbId))
 
-# Get movies cast
-get_cast <- function(link) {
-  cast <- foreach(d=iter(link, by='row'), .combine=rbind) %do% {
-    tmp <- d %>%
-      read_html() %>%
-      html_nodes("#titleCast .itemprop span") %>%
-      html_text(trim = T) %>%
-      tibble()
-      print(class(tmp))
-      ifelse(length(tmp) == 0, NA, tmp)
-  }
-  # turn to tibble?
-  return(cast)
-}
-get_cast(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt3447228"))
+# Quick check
+get_cast(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0076759"))
+get_budget(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0076759"))
+get_director(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0076759"))
+get_time(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0076759"))
 
-# https://rpubs.com/esundeep/webscape_imdb_rvest
-get_budget <- function(link) {
-  budget <- foreach(d=iter(link, by='row'), .combine=rbind) %do% {
-    tmp <- d %>%
-      read_html() %>%
-      html_nodes(css='#titleDetails > .txt-block') %>%
-      html_text(trim = T) %>%
-      tibble() %>% filter(str_detect(., "Budget"))
-      ifelse(length(tmp) == 0, NA, parse_number(unlist(tmp)))
-  }
-  return(budget)
-}
-get_budget(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt3447228"))
-
-
-get_director <- function(link) {
-  
-  director <- foreach(d=iter(link, by='row'), .combine=rbind) %do% {
-    tmp <- d %>%
-      read_html() %>%
-      html_nodes(css='.credit_summary_item >  span[itemprop="director"]') %>%
-      html_text(trim = T)
-      ifelse(length(tmp) == 0, NA, tmp)
-  }
-  # TODO watch out for multiple directors
-  print(director)
-  return(director)
-}
-get_director(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt5189670"))
-
-
-get_time <- function(link) {
-  
-  time <- foreach(d=iter(link, by='row'), .combine=rbind) %do% {
-    tmp <- d %>%
-      read_html() %>%
-      html_nodes(css='#titleDetails > .txt-block') %>%
-      html_text(trim = T) %>%
-      tibble() %>% filter(str_detect(., "Runtime"))
-    ifelse(length(tmp) == 0, NA, parse_number(unlist(tmp)))
-  }
-  return(time)
-}
-get_time(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt5189670"))
-
+# Out of curiosity
+system.time({
 imdb_df1 <- imdb_df %>%
   top_n(10) %>%
-  #mutate(budget = get_budget(link)) %>%
-  mutate(director = get_director(link))
-
+  mutate(time = get_time(link)) %>%
+  mutate(director = get_director(link)) %>%
+  mutate(budget = get_budget(link)) %>% # Will be sparse
+  mutate(cast = get_cast(link))
+})
 # Q5 ----------------------------------------------------------------------
 
 
