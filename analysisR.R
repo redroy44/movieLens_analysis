@@ -261,7 +261,7 @@ get_director <- function(link) {
       html_text(trim = T)
       ifelse(length(tmp) == 0, NA, tmp)
   }
-  
+  # TODO watch out for multiple directors
   print(director)
   return(director)
 }
