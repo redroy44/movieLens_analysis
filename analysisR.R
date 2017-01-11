@@ -223,14 +223,19 @@ imdb_df <- movies_df %>%
 
 # Get movies cast
 get_cast <- function(link) {
-  cast <- link %>%
-    read_html() %>%
-    html_nodes("#titleCast .itemprop span") %>%
-    html_text() %>%
-    tibble()
-
+  cast <- foreach(d=iter(link, by='row'), .combine=rbind) %do% {
+    tmp <- d %>%
+      read_html() %>%
+      html_nodes("#titleCast .itemprop span") %>%
+      html_text(trim = T) %>%
+      tibble()
+      print(class(tmp))
+      ifelse(length(tmp) == 0, NA, tmp)
+  }
+  # turn to tibble?
   return(cast)
 }
+get_cast(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt3447228"))
 
 # https://rpubs.com/esundeep/webscape_imdb_rvest
 get_budget <- function(link) {
@@ -264,16 +269,18 @@ get_director(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title
 
 
 get_time <- function(link) {
-  time <- link %>%
-    read_html() %>%
-    html_nodes(css='#titleDetails > div > time[itemprop="duration"]') %>%
-    html_text(trim = T) %>%
-    parse_number()
   
-  time <- ifelse(length(time) == 0, time, NA)
-  
+  time <- foreach(d=iter(link, by='row'), .combine=rbind) %do% {
+    tmp <- d %>%
+      read_html() %>%
+      html_nodes(css='#titleDetails > .txt-block') %>%
+      html_text(trim = T) %>%
+      tibble() %>% filter(str_detect(., "Runtime"))
+    ifelse(length(tmp) == 0, NA, parse_number(unlist(tmp)))
+  }
   return(time)
 }
+get_time(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt5189670"))
 
 imdb_df1 <- imdb_df %>%
   top_n(10) %>%
