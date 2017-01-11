@@ -234,21 +234,14 @@ get_cast <- function(link) {
 
 # https://rpubs.com/esundeep/webscape_imdb_rvest
 get_budget <- function(link) {
-  print(class(link))
-  
-  budget <- foreach(d=iter(link, by='row'), .combine=rbind) %dopar% {
+  budget <- foreach(d=iter(link, by='row'), .combine=rbind) %do% {
     tmp <- d %>%
       read_html() %>%
-      html_nodes(css='#titleDetails > div > time[itemprop="duration"]') %>%
+      html_nodes(css='#titleDetails > .txt-block') %>%
       html_text(trim = T) %>%
-      parse_number()
-      ifelse(length(tmp) == 0, NA, tmp)
+      tibble() %>% filter(str_detect(., "Budget"))
+      ifelse(length(tmp) == 0, NA, parse_number(unlist(tmp)))
   }
-  
-  print(budget)
-
-  #budget <- ifelse(length(budget) == 0, NA, budget)
-
   return(budget)
 }
 get_budget(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt3447228"))
@@ -256,11 +249,12 @@ get_budget(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/t
 
 get_director <- function(link) {
   
-  director <- foreach(d=iter(link, by='row'), .combine=rbind) %dopar% {
-    d %>%
+  director <- foreach(d=iter(link, by='row'), .combine=rbind) %do% {
+    tmp <- d %>%
       read_html() %>%
       html_nodes(css='.credit_summary_item >  span[itemprop="director"]') %>%
       html_text(trim = T)
+      ifelse(length(tmp) == 0, NA, tmp)
   }
   
   print(director)
@@ -272,7 +266,7 @@ get_director(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title
 get_time <- function(link) {
   time <- link %>%
     read_html() %>%
-    html_nodes(css='#titleDetails > div:nth-child(21)') %>%
+    html_nodes(css='#titleDetails > div > time[itemprop="duration"]') %>%
     html_text(trim = T) %>%
     parse_number()
   
