@@ -200,7 +200,7 @@ genres_rating <- movies_df %>%
   group_by(year, genres) %>%
   summarise(count = n(), avg_rating = mean(rating)) %>%
   ungroup() %>%
-  mutate(score = ci_lower(avg_rating/5, count, 0.95))# %>%
+  mutate(score = ci_lower(avg_rating/5, count, 0.95)) %>%
   arrange(year)
 
 # TODO turn to ggvis!
@@ -209,6 +209,86 @@ genres_rating %>%
     geom_line(aes(group=genres, color=genres)) +
     geom_smooth(aes(group=genres, color=genres)) +
     facet_wrap(~genres)
+
+
+
+# Web Scraping ------------------------------------------------------------
+
+imdb_url = "http://www.imdb.com/title/tt"
+
+imdb_df <- movies_df %>%
+  inner_join(links, by = "movieId") %>%
+  select(-tmdbId) %>%
+  mutate(link = paste0(imdb_url, imdbId))
+
+# Get movies cast
+get_cast <- function(link) {
+  cast <- link %>%
+    read_html() %>%
+    html_nodes("#titleCast .itemprop span") %>%
+    html_text() %>%
+    tibble()
+
+  return(cast)
+}
+
+# https://rpubs.com/esundeep/webscape_imdb_rvest
+get_budget <- function(link) {
+  print(class(link))
+  
+  budget <- foreach(d=iter(link, by='row'), .combine=rbind) %dopar% {
+    tmp <- d %>%
+      read_html() %>%
+      html_nodes(css='#titleDetails > div > time[itemprop="duration"]') %>%
+      html_text(trim = T) %>%
+      parse_number()
+      ifelse(length(tmp) == 0, NA, tmp)
+  }
+  
+  print(budget)
+
+  #budget <- ifelse(length(budget) == 0, NA, budget)
+
+  return(budget)
+}
+get_budget(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt3447228"))
+
+
+get_director <- function(link) {
+  
+  director <- foreach(d=iter(link, by='row'), .combine=rbind) %dopar% {
+    d %>%
+      read_html() %>%
+      html_nodes(css='.credit_summary_item:nth-child(2) .itemprop') %>%
+      html_text(trim = T)
+  }
+  
+  print(director)
+  return(director)
+}
+get_director(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt3447228"))
+
+
+get_time <- function(link) {
+  time <- link %>%
+    read_html() %>%
+    html_nodes(css='#titleDetails > div:nth-child(21)') %>%
+    html_text(trim = T) %>%
+    parse_number()
+  
+  time <- ifelse(length(time) == 0, time, NA)
+  
+  return(time)
+}
+
+imdb_df1 <- imdb_df %>%
+  top_n(10) %>%
+  #mutate(budget = get_budget(link)) %>%
+  mutate(director = get_director(link))
+
+# Q5 ----------------------------------------------------------------------
+
+
 
 
 
