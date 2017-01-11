@@ -259,14 +259,14 @@ get_director <- function(link) {
   director <- foreach(d=iter(link, by='row'), .combine=rbind) %dopar% {
     d %>%
       read_html() %>%
-      html_nodes(css='.credit_summary_item:nth-child(2) .itemprop') %>%
+      html_nodes(css='.credit_summary_item >  span[itemprop="director"]') %>%
       html_text(trim = T)
   }
   
   print(director)
   return(director)
 }
-get_director(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt3447228"))
+get_director(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt5189670"))
 
 
 get_time <- function(link) {
