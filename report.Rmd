@@ -1,6 +1,7 @@
 ---
 title: "Report - movieLens dataset analysis"
-output: github_document
+output: 
+  html_document
 ---
 
 ```{r setup, include=FALSE}
@@ -12,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE, message=F, warning=F)
 This is an R Markdown format used for publishing markdown documents to GitHub. When you click the **Knit** button all R code chunks are run and a markdown file (.md) suitable for publishing to GitHub is generated.
 
 ### Packages used
-```{r packages, results='hide', cache=T}
+```{r packages, results='hide'}
 # Load the packages -------------------------------------------------------
 library(checkpoint)
 checkpoint("2016-11-15", auto.install.knitr=T)
@@ -20,6 +21,7 @@ library(tidyverse)
 library(lubridate)
 library(stringr)
 library(rvest)
+library(XML)
 library(tidytext)
 library(wordcloud)
 library(doMC)
@@ -112,7 +114,7 @@ genres <- movies_df %>%
 ## Data Exploration
 
 ### Q1
-```{r}
+```{r q1}
 # Number of movies per year/decade
 movies_per_year <- movies_df %>%
   na.omit() %>%
@@ -132,7 +134,7 @@ movies_per_year %>%
 ```
 
 ### Q2
-```{r}
+```{r q2}
 # Genres popularity per year
 genres_popularity <- movies_df %>%
   na.omit() %>%
@@ -160,8 +162,9 @@ genres_popularity %>%
     scale_fill_brewer(palette = "Paired") 
 ```
 
-### Q3
-```{r, warning=T, message=T}
+### Q3 {.tabset .tabset-fade .tabset-pills}
+Question 3 text
+```{r q3-1, warning=T, message=T}
 # Tags for genres
 genres_tags <- movies_df %>%
   na.omit() %>%
@@ -172,7 +175,11 @@ genres_tags <- movies_df %>%
   #distinct() %>%
   group_by(genres) %>%
   nest()
+```
 
+#### Action
+
+```{r q3-2, warning=T, message=T}
 # plot wordcloud per genre
 genre<-"Action"
 genre_words <- genres_tags %>%
@@ -186,9 +193,25 @@ genre_words <- genres_tags %>%
 
 ```
 
+#### Comedy
+
+```{r q3-3, warning=T, message=T}
+# plot wordcloud per genre
+genre<-"Comedy"
+genre_words <- genres_tags %>%
+  filter(genres == genre) %>%
+  unnest() %>%
+  mutate(tag = str_to_lower(tag, "en")) %>%
+  anti_join(tibble(tag=c(tolower(genre)))) %>%
+  count(tag)
+
+  wordcloud(genre_words$tag, genre_words$n, max.words = 10, colors=brewer.pal(8, "Dark2"))
+
+```
+
 
 ### Q4
-```{r}
+```{r q4}
 # average rating for a movie
 
 avg_rating <- ratings_df %>%
@@ -227,7 +250,7 @@ print(best_per_decade)
 ```
 
 ### Q5
-```{r}
+```{r q5}
 genres_rating <- movies_df %>%
   na.omit() %>%
   select(movieId, year, genres) %>%
@@ -251,7 +274,7 @@ genres_rating %>%
 ```
 
 ## Web Scraping
-```{r, results='hold'}
+```{r , results='hold'}
 # source utility functions
 source(file = "functions.R")
 
@@ -270,10 +293,10 @@ get_time(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0
 ```
 
 ### Q6
-```{r}
+```{r q6, cache=T}
 system.time({
 imdb_df1 <- imdb_df %>%
-  top_n(100) %>%
+  top_n(10) %>%
   mutate(time = get_time(link)) %>%
   mutate(director = get_director(link)) %>%
   mutate(budget = get_budget(link)) %>% # Will be sparse. Or not?
