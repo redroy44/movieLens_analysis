@@ -24,14 +24,14 @@ data_folder <- "data"
 archive_type <- ".zip"
 
 # Choose dataset version
-dataset <- dataset_small
+dataset <- dataset_full
 dataset_zip <- paste0(dataset, archive_type)
 
 # Download the data and unzip it
 if (!file.exists(file.path(data_folder, dataset_zip))) {
   download.file(paste0(url, dataset_zip), file.path(data_folder, dataset_zip))
 }
-unzip(file.path(data_folder, dataset_zip), exdir = data_folder)
+unzip(file.path(data_folder, dataset_zip), exdir = data_folder, overwrite = F)
 
 # Load the files
 dataset_files <- c("movies", "ratings", "links", "tags")
@@ -40,19 +40,21 @@ suffix <- ".csv"
 for (f in dataset_files) {
   path <- file.path(data_folder, dataset, paste0(f, suffix))
   assign(f, read_csv(path))
-  print(object.size(f),units="Mb") # Not working?
+  print(paste(f, "object size is", format(object.size(get(f)),units="Mb")))
 }
 
 
 # Data cleaning -----------------------------------------------------------
 
 # Clean ratings
+glimpse(ratings)
 ratings_df <- tbl_df(ratings) %>%
   mutate(timestamp = as_datetime(timestamp))
 
 # Clean movies
-movies_df <- tbl_df(movies)
-movies_df <- movies_df %>%
+# TODO make genres a factor?
+glimpse(movies)
+movies_df <- tbl_df(movies) %>%
   mutate(title = str_trim(title)) %>% # trim whitespaces
   extract(title, c("title_tmp", "year"), regex = "^(.*) \\(([0-9 \\-]*)\\)$", remove = F) %>% # split title to title, year
   mutate(year = if_else(str_length(year) > 4, as.integer(str_split(year, "-", simplify = T)[1]), as.integer(year))) %>% # for series take debut date
@@ -66,10 +68,17 @@ na_movies <- movies_df %>%
   print
 
 # Clean tags
+glimpse(tags)
 tags_df <- tbl_df(tags) %>%
   mutate(timestamp = as_datetime(timestamp))
 
 summary(movies_df)
+
+genres <- movies_df %>%
+  separate_rows(genres, sep = "\\|") %>%
+  group_by(genres) %>%
+  summarise(number = n()) %>%
+  arrange(desc(number))
 
 
 # Q0 ----------------------------------------------------------------------
@@ -129,17 +138,19 @@ genres_tags <- movies_df %>%
   separate_rows(genres, sep = "\\|") %>%
   inner_join(tags_df, by = "movieId") %>%
   select(genres, tag) %>%
-  group_by(genres) %>% 
-  summarise(tag_list=unique(list(tag)))
-
-genres_tags1 <- genres_tags %>%
+  #distinct() %>%
   group_by(genres) %>%
-  mutate(dupa = 1)
+  nest()
 
-# tidy_books %>%
-#   anti_join(stop_words) %>%
-#   count(word) %>%
-#   with(wordcloud(word, n, max.words = 100))
+# plot wordcloud per genre
+genres_tags %>%
+  filter(genres == "Thriller") %>%
+  unnest() %>%
+  mutate(tag = str_to_lower(tag, "en")) %>%
+  count(tag) %>%
+  with(wordcloud(tag, n, max.words = 50, colors=brewer.pal(8, "Dark2")))
+
+# comparison.cloud?
 
 
 # Q3 ----------------------------------------------------------------------
@@ -180,14 +191,14 @@ best_per_decade <- avg_rating %>%
 
 # Q4 ----------------------------------------------------------------------
 
-avg_rating <- ratings_df %>%
-  inner_join(movies_df, by = "movieId") %>%
-  na.omit() %>%
-  select(movieId, title, rating, year) %>%
-  group_by(movieId, title, year) %>%
-  summarise(count = n(), mean = mean(rating), min = min(rating), max = max(rating)) %>%
-  ungroup() %>%
-  arrange(count, desc(mean))
+# avg_rating <- ratings_df %>%
+#   inner_join(movies_df, by = "movieId") %>%
+#   na.omit() %>%
+#   select(movieId, title, rating, year) %>%
+#   group_by(movieId, title, year) %>%
+#   summarise(count = n(), mean = mean(rating), min = min(rating), max = max(rating)) %>%
+#   ungroup() %>%
+#   arrange(count, desc(mean))
 
 genres_rating <- movies_df %>%
   na.omit() %>%
@@ -203,7 +214,8 @@ genres_rating <- movies_df %>%
   arrange(year)
 
 # TODO turn to ggvis!
-genres_rating %>%
+a<- genres_rating %>%
+  filter(genres %in% genres_top$genres) %>%
   ggplot(aes(x = year, y = score)) +
     geom_line(aes(group=genres, color=genres)) +
     geom_smooth(aes(group=genres, color=genres)) +
@@ -229,12 +241,13 @@ get_director(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title
 get_time(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0076759"))
 
 # Out of curiosity
+#Need to optimize this to one function?
 system.time({
 imdb_df1 <- imdb_df %>%
-  top_n(10) %>%
+  top_n(100) %>%
   mutate(time = get_time(link)) %>%
   mutate(director = get_director(link)) %>%
-  mutate(budget = get_budget(link)) %>% # Will be sparse
+  mutate(budget = get_budget(link)) %>% # Will be sparse. Or not?
   mutate(cast = get_cast(link))
 })
 # Q5 ----------------------------------------------------------------------
