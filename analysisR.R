@@ -6,7 +6,6 @@ library(lubridate)
 library(stringr)
 library(rvest)
 library(tidytext)
-library(tm)
 library(wordcloud)
 library(doMC)
 registerDoMC(cores = 8)
@@ -143,10 +142,12 @@ genres_tags <- movies_df %>%
   nest()
 
 # plot wordcloud per genre
+genre<-"Horror"
 genres_tags %>%
-  filter(genres == "Thriller") %>%
+  filter(genres == genre) %>%
   unnest() %>%
   mutate(tag = str_to_lower(tag, "en")) %>%
+  anti_join(tibble(tag=c(tolower(genre)))) %>%
   count(tag) %>%
   with(wordcloud(tag, n, max.words = 50, colors=brewer.pal(8, "Dark2")))
 
