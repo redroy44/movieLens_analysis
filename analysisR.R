@@ -11,6 +11,8 @@ library(doMC)
 registerDoMC(cores = 8)
 set.seed(29082012)
 
+# genre rating histogram
+
 # Print Version Information
 version
 
@@ -23,7 +25,7 @@ data_folder <- "data"
 archive_type <- ".zip"
 
 # Choose dataset version
-dataset <- dataset_full
+dataset <- dataset_small
 dataset_zip <- paste0(dataset, archive_type)
 
 # Download the data and unzip it
@@ -244,12 +246,12 @@ get_time(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0
 # Out of curiosity
 #Need to optimize this to one function?
 system.time({
-imdb_df1 <- imdb_df %>%
-  top_n(100) %>%
-  mutate(time = get_time(link)) %>%
-  mutate(director = get_director(link)) %>%
-  mutate(budget = get_budget(link)) %>% # Will be sparse. Or not?
-  mutate(cast = get_cast(link))
+imdb_df1 <- imdb_df1 %>%
+  #top_n(100) %>%
+  #mutate(time = get_time(link))# %>%
+  mutate(director = get_director(link))# %>%
+  #mutate(budget = get_budget(link))# %>% # Will be sparse. Or not?
+  #mutate(cast = get_cast(link))
 })
 # Q5 ----------------------------------------------------------------------
 

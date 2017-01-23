@@ -1,7 +1,8 @@
 ---
 title: "Report - movieLens dataset analysis"
-output: 
-  html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -10,9 +11,22 @@ knitr::opts_chunk$set(echo = TRUE, message=F, warning=F)
 
 ## Introduction
 
-This is an R Markdown format used for publishing markdown documents to GitHub. When you click the **Knit** button all R code chunks are run and a markdown file (.md) suitable for publishing to GitHub is generated.
+> Note: The sources are available [here](https://github.com/redroy44/movieLens_analysis).
+
+This is a report on the movieLens dataset available [here](https://grouplens.org/datasets/movielens/). MovieLens itself is a research site run by GroupLens Research group at the University of Minnesota. An interesting thing to notice is that the first automated recommender system was developed there in 1993.
+
+### Objectives
+
+The movieLens dataset is most often used for the purpose of recommender systems. Their purpose is to predict user movie ratings based on other users' ratings. In other words we expect that user with similar taste will tend to rate movies with high correlation. 
+
+However, in this analysis we will try to explore the movies themselves. Hopefully it will give us an interesting insight into the history of cinematography.
 
 ### Packages used
+
+For this analysis the Microsoft R Open distribution was used. The reason for this was its multithreaded performance as described [here](https://mran.microsoft.com/documents/rro/multithread/). Most of the packages that were used come from the [tidyverse](http://tidyverse.org/) - a collection of packages that share common philosophies of tidy data. The tidytext and wordcloud packages were used for some text processing. Finally the doMC package was used to embrace the multithreading in some of the custom functions which will be described later. 
+
+> Note: doMC package is not available on Windows. Use doParallel package instead.
+
 ```{r packages, results='hide'}
 # Load the packages -------------------------------------------------------
 library(checkpoint)
@@ -28,14 +42,23 @@ library(doMC)
 registerDoMC(cores = 8)
 set.seed(29082012)
 ```
+
+The output of sessionInfo() is placed here for reproducibility purposes.
 ```{r, echo=T}
-# Print Version Information
-version
+# Print Session Information
+sessionInfo()
 ```
 
 ## Dataset Description
 
+The dataset is avaliable in several snapshots. The ones that were used in this analysis were Latest Datasets - both full and small (for testing purposes). They were last updated in October 2016.
+
+First the data was automatically downloaded and unzipped. 
+
 ###Dataset Download
+
+First the data was automatically downloaded and unzipped. Although it is generally done only once during the analysis, it makes the reproducibility so much easier and less painful.
+
 ```{r, echo=T}
 url <- "http://files.grouplens.org/datasets/movielens/"
 dataset_small <- "ml-latest-small"
@@ -44,7 +67,7 @@ data_folder <- "data"
 archive_type <- ".zip"
 
 # Choose dataset version
-dataset <- dataset_small
+dataset <- dataset_full
 dataset_zip <- paste0(dataset, archive_type)
 
 # Download the data and unzip it
@@ -52,8 +75,15 @@ if (!file.exists(file.path(data_folder, dataset_zip))) {
   download.file(paste0(url, dataset_zip), file.path(data_folder, dataset_zip))
 }
 unzip(file.path(data_folder, dataset_zip), exdir = data_folder, overwrite = F)
+
+# Display the unzipped files
+list.files('data/', recursive=T)
 ```
 ### Loading the Dataset
+
+The dataset is split into four files (genome-scores.csv and genome-tags.csv were omitted for this analysis)- movies.csv, ratings.csv, links.csv and tags.csv. We will iteratively load the files into the workspace using read_csv() function and assign variable names accordingly. The read_csv() function is very convenient because it automagically guesses column types based on the first thousand rows. And more importantly it never converts strings to factors. Never. 
+
+Finally we will check object sizes to see how big is the dataset.
 ```{r, echo=T}
 dataset_files <- c("movies", "ratings", "links", "tags")
 suffix <- ".csv"
@@ -65,14 +95,30 @@ for (f in dataset_files) {
 }
 ```
 
+The biggest data frame is ratings - it contains movie ratings from movieLens users. Next we will see what kind of data we deal with.
+
 ## Data Cleaning
+
+In this section we will take the first look at the loaded data frames. We will also perform necessary cleaning and some transformations so that the data better suits our needs. First, let's look at the ratings table.
 
 ```{r}
 # Clean ratings
 glimpse(ratings)
+```
+
+We have 24 millions rows and 4 columns. It seems that only timestamp column need to be parsed. We will create new data frame that we will work on and preserve the original data frame (treat it as read-only).
+
+```{r}
 ratings_df <- tbl_df(ratings) %>%
   mutate(timestamp = as_datetime(timestamp))
 ```
+Next, let's check if there are any missing values.
+```{r}
+summary(ratings_df)
+```
+
+
+
 ```{r}
 # Clean movies
 # TODO make genres a factor?
@@ -108,7 +154,7 @@ genres <- movies_df %>%
   group_by(genres) %>%
   summarise(number = n()) %>%
   arrange(desc(number))
-  knitr::kable(genres, caption = "List of Genres")
+  #knitr::kable(genres, caption = "List of Genres")
 ```
 
 ## Data Exploration
@@ -296,7 +342,7 @@ get_time(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0
 ```{r q6, cache=T}
 system.time({
 imdb_df1 <- imdb_df %>%
-  top_n(10) %>%
+  top_n(1) %>%
   mutate(time = get_time(link)) %>%
   mutate(director = get_director(link)) %>%
   mutate(budget = get_budget(link)) %>% # Will be sparse. Or not?
