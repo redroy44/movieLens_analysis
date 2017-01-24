@@ -395,7 +395,7 @@ genre_words <- genres_tags %>%
 ```
 
 
-### Q4
+### What were the best movies of every decade (based on users' ratings)?
 ```{r q4}
 # average rating for a movie
 
@@ -406,9 +406,9 @@ avg_rating <- ratings_df %>%
   group_by(movieId, title, year) %>%
   summarise(count = n(), mean = mean(rating), min = min(rating), max = max(rating)) %>%
   ungroup() %>%
-  arrange(count, desc(mean)) %>%
-  print
+  arrange(count, desc(mean))
 ```
+
 ```{r, warning=T, message=T}
 # Lower bound of Wilson score confidence interval for a Bernoulli parameter
 # http://www.evanmiller.org/how-not-to-sort-by-average-rating.html
@@ -430,11 +430,11 @@ best_per_decade <- avg_rating %>%
   mutate(decade = year  %/% 10 * 10) %>%
   arrange(year, desc(score)) %>%
   group_by(decade) %>%
-  summarise(title = first(title), score = first(score), mean = first(mean), count = first(count)) %>%
-  print()
+  summarise(title = first(title), score = first(score), mean = first(mean), count = first(count))
+  print(best_per_decade)
 ```
 
-### Q5
+### What were the best years for a genre (based on users' ratings)?
 ```{r q5}
 genres_rating <- movies_df %>%
   na.omit() %>%
@@ -449,7 +449,6 @@ genres_rating <- movies_df %>%
   mutate(score = ci_lower(avg_rating/5, count, 0.95)) %>%
   arrange(year)
 
-# TODO turn to ggvis!
 genres_rating %>%
   filter(genres %in% genres_top$genres) %>%
   ggplot(aes(x = year, y = score)) +
@@ -477,8 +476,8 @@ get_director(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title
 get_time(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0076759"))
 ```
 
-### Q6
-```{r q6, eval=F}
+
+```{r, eval=F}
 system.time({
 imdb_df1 <- imdb_df %>%
   top_n(1) %>%
@@ -488,3 +487,7 @@ imdb_df1 <- imdb_df %>%
   mutate(cast = get_cast(link))
 })
 ```
+
+### Does a movie budget affect its score?
+
+## Conclusion
