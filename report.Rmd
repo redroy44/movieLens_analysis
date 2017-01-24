@@ -1,12 +1,11 @@
 ---
 title: "Report - movieLens dataset analysis"
 output:
-  pdf_document: default
   html_document: default
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message=F, warning=F)
+knitr::opts_chunk$set(echo = TRUE, message=F, warning=F, cache=T)
 ```
 
 ## Introduction
@@ -109,108 +108,151 @@ glimpse(ratings)
 We have 24 millions rows and 4 columns. It seems that only timestamp column need to be parsed. We will create new data frame that we will work on and preserve the original data frame (treat it as read-only).
 
 ```{r}
-ratings_df <- tbl_df(ratings) %>%
+ratings_df <- ratings %>%
   mutate(timestamp = as_datetime(timestamp))
-```
-Next, let's check if there are any missing values.
-```{r}
+
 summary(ratings_df)
 ```
 
-
+Ok, looks like there is no missing data. We can also see that the ratings range from 0.5 to 5 and that they are timestamped. Now, let's look into the movies data frame.
 
 ```{r}
-# Clean movies
-# TODO make genres a factor?
 glimpse(movies)
-movies_df <- tbl_df(movies) %>%
+```
+There are 40 thousand movies and 3 columns. Most of the movies have their debut year added to their names - we want to extract this into separate columns. Genres columns contains multiple categories per row - we want to have them separated into one category per row. We will deal with this later.
+```{r warning=T}
+movies_df <- movies %>%
   mutate(title = str_trim(title)) %>% # trim whitespaces
   extract(title, c("title_tmp", "year"), regex = "^(.*) \\(([0-9 \\-]*)\\)$", remove = F) %>% # split title to title, year
   mutate(year = if_else(str_length(year) > 4, as.integer(str_split(year, "-", simplify = T)[1]), as.integer(year))) %>% # for series take debut date
   mutate(title = if_else(is.na(title_tmp), title, title_tmp)) %>% # replace title NA's with original title
-  select(-title_tmp)  %>%# drop title1 column
+  select(-title_tmp)  %>%# drop title_tmp column
   mutate(genres = if_else(genres == "(no genres listed)", `is.na<-`(genres), genres)) # generic function to turn (no genres listed) to NA
 ```
+Here we extracted the movie debut year using extract() function from tidyr package. For the case of movie series where year has "yyyy-yyyy" format we take the first date. In the last line we replaced the string "(no genres listed)" with NA value to make further processing easier.
+
+The warnings() functions returned a message that some missing values appeared. 
+
 ```{r}
 # Check NA's
 na_movies <- movies_df %>%
   filter(is.na(title) | is.na(year)) %>%
   print
 ```
-```{r}
-# Clean tags
-glimpse(tags)
-tags_df <- tbl_df(tags) %>%
-  mutate(timestamp = as_datetime(timestamp))
-```
+Seems that warnings appeared, because some of the movies do not have their debut year. We will ignore those movies in further analysis as there aren't many of them.
+
 ```{r}
 summary(movies_df)
-
 ```
+
+Let's check the tags data frame now.
+```{r}
+glimpse(tags)
+```
+Seems that only timestamp needs to be parsed.
+```{r}
+tags_df <- tags %>%
+  mutate(timestamp = as_datetime(timestamp))
+
+summary(tags_df)
+```
+
+No missing values, we can continue to the links data frame.
 
 ```{r}
-genres <- movies_df %>%
-  separate_rows(genres, sep = "\\|") %>%
-  group_by(genres) %>%
-  summarise(number = n()) %>%
-  arrange(desc(number))
-  #knitr::kable(genres, caption = "List of Genres")
+glimpse(links)
 ```
+
+We have 40,000 rows with ids to imdb and tmdb websites. We will use them later for some web scraping.
+
+Ok, we are now done with data cleaning. Let's go deeper into the data exploration.
+
 
 ## Data Exploration
 
-### Q1
-```{r q1}
+In this part we will try to explore the dataset and reveal some interesting facts about cinematography.
+
+### How many movies were produced per year?
+The first question that may be asked is how many movies were produced year by year. We can easily extract this information from the movies_df data frame.
+```{r q1-1}
 # Number of movies per year/decade
 movies_per_year <- movies_df %>%
-  na.omit() %>%
-  select(movieId, year) %>%
-  group_by(year) %>%
-  summarise(count = n())
-
+  na.omit() %>% # omit missing values
+  select(movieId, year) %>% # select columns we need
+  group_by(year) %>% # group by year
+  summarise(count = n())  %>% # count movies per year
+  arrange(count) %>%
+  print()
+```
+There are some years that are missing, probably there were no movies produced in the early years. We can easily fix missing values using complete() function from the tidyr package.
+```{r}
 # fill missing years
 movies_per_year <- movies_per_year %>%
-  complete(year = full_seq(year, 1), fill = list(count = 0))
-
-# TODO turn to ggvis!
+  complete(year = full_seq(year, 1), fill = list(count = 0)) %>%
+  print()
+```
+ 
+ That's better. Now let's plot what we have.
+```{r q1-2}
 movies_per_year %>%
-  #filter(year > 2010) %>%
   ggplot(aes(x = year, y = count)) +
   geom_line(color="blue")
 ```
 
-### Q2
-```{r q2}
+We can see an exponential growth in the '90s and a sudden drop in 2016. The latter is caused by the fact that the data is collected until October 2016 so we don't have the full data on this year. As for the former, perhaps it was somewhat linked to the beginning of the information era. Growing popularity of the Internet must have had a positive impact on the demand for movies. That is certainly something worthy of further analysis.
+
+
+### What were the most popular movie genres year by year?
+We know how many movies were produced, but can we check what genres were popular? We might expect that some events in history might have influenced the movie creators to produce specific genres. First we will check what genres are the most popular in general.
+
+```{r}
+genres_df <- movies_df %>%
+  separate_rows(genres, sep = "\\|") %>%
+  group_by(genres) %>%
+  summarise(number = n()) %>%
+  arrange(desc(number)) %>%
+  print()
+```
+
+No suprise here. Dramas and comedies are definitely the most popular genres.
+
+```{r q2-1}
 # Genres popularity per year
 genres_popularity <- movies_df %>%
-  na.omit() %>%
-  select(movieId, year, genres) %>%
-  separate_rows(genres, sep = "\\|") %>%
-  mutate(genres = as.factor(genres)) %>%
-  group_by(year, genres) %>%
-  summarise(number = n()) %>%
-  complete(year = full_seq(year, 1), genres, fill = list(number = 0))
-
+  na.omit() %>% # omit missing values
+  select(movieId, year, genres) %>% # select columns we are interested in
+  separate_rows(genres, sep = "\\|") %>% # separate genres into rows
+  mutate(genres = as.factor(genres)) %>% # turn genres in factors
+  group_by(year, genres) %>% # group data by year and genre
+  summarise(number = n()) %>% # count
+  complete(year = full_seq(year, 1), genres, fill = list(number = 0)) # add missing years/genres
+```
+Now we are able to plot the data. For readability I chose 4 genres: animation, sci-fi, war and western movies.
+```{r q2-2, results=F, echo=F}
 # Most popular genres
 genres_top <- genres_popularity %>%
   group_by(genres) %>%
   summarise(number = sum(number)) %>%
   arrange(desc(number)) %>%
   top_n(10, number)
-  
+```
 
-# TODO turn to ggvis!
+```{r q2-3}
 genres_popularity %>%
   filter(year > 1930) %>%
-  filter(genres %in% genres_top$genres) %>%
+  filter(genres %in% c("War", "Sci-Fi", "Animation", "Western")) %>%
   ggplot(aes(x = year, y = number)) +
-    geom_area(aes(fill=genres), position = "fill") + 
+    geom_line(aes(color=genres)) + 
     scale_fill_brewer(palette = "Paired") 
 ```
 
-### Q3 {.tabset .tabset-fade .tabset-pills}
-Question 3 text
-```{r q3-1, warning=T, message=T}
+Here we have some interesting observations. First we can notice a rapid growth of sci-fi movies shortly after 1969, the year of the first Moon landing. Secondly we high number of westerns in 1950s and 1960s that was the time when westerns popularity was peaking. Nest we can see the rise of popularity of animated movies, the most probable reason might be the computer animation technology advancement which made the production much easier. War movies were popular around the time when big miliraty conflicts occured - World War II, Vietnam War and most recently War in Afghanistan and Iraq. It interesting to see how the world of cinematography reflected the state of the real world.
+
+
+### What tags best summarize a movie genre? {.tabset .tabset-fade .tabset-pills}
+Looking at how each movie genre is tagged by users is a great way to see if a movie genre can be described using just a few words. We'll explore a selection of movie genres and see if anything interesting pops out.
+
+```{r q3-1}
 # Tags for genres
 genres_tags <- movies_df %>%
   na.omit() %>%
@@ -218,14 +260,15 @@ genres_tags <- movies_df %>%
   separate_rows(genres, sep = "\\|") %>%
   inner_join(tags_df, by = "movieId") %>%
   select(genres, tag) %>%
-  #distinct() %>%
   group_by(genres) %>%
   nest()
 ```
 
+Click on a tab to see a tag wordcloud for a selected genre.
+
 #### Action
 
-```{r q3-2, warning=T, message=T}
+```{r q3-2}
 # plot wordcloud per genre
 genre<-"Action"
 genre_words <- genres_tags %>%
@@ -235,13 +278,13 @@ genre_words <- genres_tags %>%
   anti_join(tibble(tag=c(tolower(genre)))) %>%
   count(tag)
 
-  wordcloud(genre_words$tag, genre_words$n, max.words = 10, colors=brewer.pal(8, "Dark2"))
+  wordcloud(genre_words$tag, genre_words$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
 
 ```
 
 #### Comedy
 
-```{r q3-3, warning=T, message=T}
+```{r q3-3}
 # plot wordcloud per genre
 genre<-"Comedy"
 genre_words <- genres_tags %>%
@@ -251,7 +294,103 @@ genre_words <- genres_tags %>%
   anti_join(tibble(tag=c(tolower(genre)))) %>%
   count(tag)
 
-  wordcloud(genre_words$tag, genre_words$n, max.words = 10, colors=brewer.pal(8, "Dark2"))
+  wordcloud(genre_words$tag, genre_words$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### Drama
+
+```{r q3-4}
+# plot wordcloud per genre
+genre<-"Drama"
+genre_words <- genres_tags %>%
+  filter(genres == genre) %>%
+  unnest() %>%
+  mutate(tag = str_to_lower(tag, "en")) %>%
+  anti_join(tibble(tag=c(tolower(genre)))) %>%
+  count(tag)
+
+  wordcloud(genre_words$tag, genre_words$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### Thriller
+
+```{r q3-5}
+# plot wordcloud per genre
+genre<-"Thriller"
+genre_words <- genres_tags %>%
+  filter(genres == genre) %>%
+  unnest() %>%
+  mutate(tag = str_to_lower(tag, "en")) %>%
+  anti_join(tibble(tag=c(tolower(genre)))) %>%
+  count(tag)
+
+  wordcloud(genre_words$tag, genre_words$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### Horror
+
+```{r q3-6}
+# plot wordcloud per genre
+genre<-"Horror"
+genre_words <- genres_tags %>%
+  filter(genres == genre) %>%
+  unnest() %>%
+  mutate(tag = str_to_lower(tag, "en")) %>%
+  anti_join(tibble(tag=c(tolower(genre)))) %>%
+  count(tag)
+
+  wordcloud(genre_words$tag, genre_words$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### Children
+
+```{r q3-7}
+# plot wordcloud per genre
+genre<-"Children"
+genre_words <- genres_tags %>%
+  filter(genres == genre) %>%
+  unnest() %>%
+  mutate(tag = str_to_lower(tag, "en")) %>%
+  anti_join(tibble(tag=c(tolower(genre)))) %>%
+  count(tag)
+
+  wordcloud(genre_words$tag, genre_words$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### Crime
+
+```{r q3-8}
+# plot wordcloud per genre
+genre<-"Crime"
+genre_words <- genres_tags %>%
+  filter(genres == genre) %>%
+  unnest() %>%
+  mutate(tag = str_to_lower(tag, "en")) %>%
+  anti_join(tibble(tag=c(tolower(genre)))) %>%
+  count(tag)
+
+  wordcloud(genre_words$tag, genre_words$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
+
+```
+
+#### Romance
+
+```{r q3-9}
+# plot wordcloud per genre
+genre<-"Romance"
+genre_words <- genres_tags %>%
+  filter(genres == genre) %>%
+  unnest() %>%
+  mutate(tag = str_to_lower(tag, "en")) %>%
+  anti_join(tibble(tag=c(tolower(genre)))) %>%
+  count(tag)
+
+  wordcloud(genre_words$tag, genre_words$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
 
 ```
 
@@ -291,8 +430,8 @@ best_per_decade <- avg_rating %>%
   mutate(decade = year  %/% 10 * 10) %>%
   arrange(year, desc(score)) %>%
   group_by(decade) %>%
-  summarise(title = first(title), score = first(score), mean = first(mean), count = first(count))
-print(best_per_decade)
+  summarise(title = first(title), score = first(score), mean = first(mean), count = first(count)) %>%
+  print()
 ```
 
 ### Q5
@@ -339,7 +478,7 @@ get_time(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0
 ```
 
 ### Q6
-```{r q6, cache=T}
+```{r q6, eval=F}
 system.time({
 imdb_df1 <- imdb_df %>%
   top_n(1) %>%

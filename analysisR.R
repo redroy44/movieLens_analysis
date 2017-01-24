@@ -8,7 +8,7 @@ library(rvest)
 library(tidytext)
 library(wordcloud)
 library(doMC)
-registerDoMC(cores = 8)
+registerDoMC(cores = 4)
 set.seed(29082012)
 
 # genre rating histogram
@@ -246,18 +246,17 @@ get_time(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0
 # Out of curiosity
 #Need to optimize this to one function?
 system.time({
-imdb_df1 <- imdb_df1 %>%
+imdb_df <- imdb_df %>%
   #top_n(100) %>%
-  #mutate(time = get_time(link))# %>%
-  mutate(director = get_director(link))# %>%
-  #mutate(budget = get_budget(link))# %>% # Will be sparse. Or not?
+  #mutate(time = get_time(link)) %>%
+  mutate(director = get_director(link)) %>%
+  #mutate(budget = get_budget(link)) %>% # Will be sparse. Or not?
   #mutate(cast = get_cast(link))
 })
 # Q5 ----------------------------------------------------------------------
 
 
-
-
+imdb_df1 <- read_csv('imdb_df.csv')
 
 
 
