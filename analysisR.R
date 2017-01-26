@@ -153,8 +153,6 @@ genres_tags %>%
   count(tag) %>%
   with(wordcloud(tag, n, max.words = 50, colors=brewer.pal(8, "Dark2")))
 
-# comparison.cloud?
-
 
 # Q3 ----------------------------------------------------------------------
 

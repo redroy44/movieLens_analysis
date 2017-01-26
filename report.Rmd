@@ -38,7 +38,7 @@ library(XML)
 library(tidytext)
 library(wordcloud)
 library(doMC)
-registerDoMC(cores = 8)
+registerDoMC()
 set.seed(29082012)
 ```
 
@@ -264,7 +264,7 @@ genres_tags <- movies_df %>%
   nest()
 ```
 
-Click on a tab to see a tag wordcloud for a selected genre.
+Click on a tab to see a tagcloud for a selected genre.
 
 #### Action
 
@@ -282,6 +282,8 @@ genre_words <- genres_tags %>%
 
 ```
 
+Looks like action movies involve sci-fi dystopic world where a superhero is needed. We can also see Bruce Willis and Harrison Ford as synonyms for the genre, well you can't argue with that.
+
 #### Comedy
 
 ```{r q3-3}
@@ -298,8 +300,10 @@ genre_words <- genres_tags %>%
 
 ```
 
-#### Drama
+The most popular comedy would a dark/black comedy that is quirky, satiric and takes place in high school. We can also see Bill Murray, Tom Hanks and Jim Carrey as actors who characterize the genre.
 
+#### Drama
+<!-- throw out -->
 ```{r q3-4}
 # plot wordcloud per genre
 genre<-"Drama"
@@ -313,6 +317,8 @@ genre_words <- genres_tags %>%
   wordcloud(genre_words$tag, genre_words$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
 
 ```
+
+
 
 #### Thriller
 
@@ -330,6 +336,8 @@ genre_words <- genres_tags %>%
 
 ```
 
+Looks like the best thriller would be full of action and violence, starring Brruce Willis and Brad Pitt nad taking place in a surreal, sci-fi reality.
+
 #### Horror
 
 ```{r q3-6}
@@ -346,6 +354,8 @@ genre_words <- genres_tags %>%
 
 ```
 
+What is a recipe for a good horror? Serial killers and aliens in a post-apocalyptic world. With a plot containing a lot of suspension, twist ending with a hint of nudity.
+
 #### Children
 
 ```{r q3-7}
@@ -355,12 +365,14 @@ genre_words <- genres_tags %>%
   filter(genres == genre) %>%
   unnest() %>%
   mutate(tag = str_to_lower(tag, "en")) %>%
-  anti_join(tibble(tag=c(tolower(genre)))) %>%
+  anti_join(tibble(tag=c(tolower(genre), "animation"))) %>%
   count(tag)
 
   wordcloud(genre_words$tag, genre_words$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
 
 ```
+
+As for chldren movies, we can see that the genre is dominated by Disney and Pixar companies. Most children movies include funny talking animals and are based on books.
 
 #### Crime
 
@@ -378,8 +390,10 @@ genre_words <- genres_tags %>%
 
 ```
 
-#### Romance
+Crime movies are often related to comedies and as expected they often end with a plot twist.
 
+#### Romance
+<!-- throw out -->
 ```{r q3-9}
 # plot wordcloud per genre
 genre<-"Romance"
