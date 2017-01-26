@@ -48,9 +48,9 @@ get_director <- function(link) {
 # Get movie running time ------------------------------------------------  
 get_time <- function(link) {
   
-  time <- foreach(d=iter(link, by='row'), .combine=rbind, .verbose=T) %dopar% {
+  time <- foreach(d=iter(link, by='row'), .combine=rbind) %dopar% {
     tmp <- d %>%
-      read_html(verbose = T) %>%
+      read_html() %>%
       html_nodes(css='#titleDetails > .txt-block') %>%
       html_text(trim = T) %>%
       tibble() %>% filter(str_detect(., "Runtime"))
