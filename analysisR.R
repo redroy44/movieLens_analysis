@@ -1,6 +1,6 @@
 # Load the packages -------------------------------------------------------
 library(checkpoint)
-checkpoint("2016-11-15", auto.install.knitr=T)
+checkpoint("2017-01-15", auto.install.knitr=T)
 library(tidyverse)
 library(lubridate)
 library(stringr)
