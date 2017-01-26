@@ -282,7 +282,7 @@ genre_words <- genres_tags %>%
 
 ```
 
-Looks like action movies involve sci-fi dystopic world where a superhero is needed. We can also see Bruce Willis and Harrison Ford as synonyms for the genre, well you can't argue with that.
+<!-- Looks like action movies involve sci-fi dystopic world where a superhero is needed. We can also see Bruce Willis and Harrison Ford as synonyms for the genre, well you can't argue with that. -->
 
 #### Comedy
 
@@ -300,7 +300,7 @@ genre_words <- genres_tags %>%
 
 ```
 
-The most popular comedy would a dark/black comedy that is quirky, satiric and takes place in high school. We can also see Bill Murray, Tom Hanks and Jim Carrey as actors who characterize the genre.
+<!-- The most popular comedy would a dark/black comedy that is quirky, satiric and takes place in high school. We can also see Bill Murray, Tom Hanks and Jim Carrey as actors who characterize the genre. -->
 
 #### Drama
 <!-- throw out -->
@@ -336,7 +336,7 @@ genre_words <- genres_tags %>%
 
 ```
 
-Looks like the best thriller would be full of action and violence, starring Brruce Willis and Brad Pitt nad taking place in a surreal, sci-fi reality.
+<!-- Looks like the best thriller would be full of action and violence, starring Brruce Willis and Brad Pitt nad taking place in a surreal, sci-fi reality. -->
 
 #### Horror
 
@@ -354,7 +354,7 @@ genre_words <- genres_tags %>%
 
 ```
 
-What is a recipe for a good horror? Serial killers and aliens in a post-apocalyptic world. With a plot containing a lot of suspension, twist ending with a hint of nudity.
+<!-- What is a recipe for a good horror? Serial killers and aliens in a post-apocalyptic world. With a plot containing a lot of suspension, twist ending with a hint of nudity. -->
 
 #### Children
 
@@ -372,7 +372,7 @@ genre_words <- genres_tags %>%
 
 ```
 
-As for chldren movies, we can see that the genre is dominated by Disney and Pixar companies. Most children movies include funny talking animals and are based on books.
+<!-- As for chldren movies, we can see that the genre is dominated by Disney and Pixar companies. Most children movies include funny talking animals and are based on books. -->
 
 #### Crime
 
@@ -390,7 +390,7 @@ genre_words <- genres_tags %>%
 
 ```
 
-Crime movies are often related to comedies and as expected they often end with a plot twist.
+<!-- Crime movies are often related to comedies and as expected they often end with a plot twist. -->
 
 #### Romance
 <!-- throw out -->
@@ -440,7 +440,7 @@ avg_rating <- avg_rating %>%
 # find best movie of a decade based on score
 # heavily dependent on the number of reviews
 best_per_decade <- avg_rating %>%
-  filter(count > 2) %>% # at least the median number of reviews (3)
+  filter(count > 3) %>% # at least the median number of reviews (3)
   mutate(decade = year  %/% 10 * 10) %>%
   arrange(year, desc(score)) %>%
   group_by(decade) %>%
@@ -449,7 +449,7 @@ best_per_decade <- avg_rating %>%
 ```
 
 ### What were the best years for a genre (based on users' ratings)?
-```{r q5}
+```{r q5-1}
 genres_rating <- movies_df %>%
   na.omit() %>%
   select(movieId, year, genres) %>%
@@ -462,9 +462,11 @@ genres_rating <- movies_df %>%
   ungroup() %>%
   mutate(score = ci_lower(avg_rating/5, count, 0.95)) %>%
   arrange(year)
-
+```
+```{r q5-2}
 genres_rating %>%
-  filter(genres %in% genres_top$genres) %>%
+  #filter(genres %in% genres_top$genres) %>%
+  filter(genres %in% c("Action", "Romance", "Sci-Fi", "Western")) %>%
   ggplot(aes(x = year, y = score)) +
     geom_line(aes(group=genres, color=genres)) +
     geom_smooth(aes(group=genres, color=genres)) +
@@ -472,6 +474,24 @@ genres_rating %>%
 ```
 
 ## Web Scraping
+In the final part of the dataset exploration I used a handful of functions for performing web scraping from IMDB website using the data from links data frame. 
+An example function looks like the one below. The `%dopar%` operator enables parallel processing that greatly speeds up the computations.
+```{r, eval=F}
+# Get movie cast ----------------------------------------------------------
+get_cast <- function(link) {
+  cast <- foreach(d=iter(link, by='row'), .combine=rbind) %dopar% {
+    tmp <- d %>%
+      read_html() %>%
+      html_nodes("#titleCast .itemprop span") %>%
+      html_text(trim = T) %>%
+      paste(collapse="|")
+  }
+  rownames(cast) <- c()
+  return(as.vector(cast))
+}
+```
+
+Next, we'll prepare a new data frame that will contain explicit links to imdb website and run basic tests to verify if the functions work.
 ```{r , results='hold'}
 # source utility functions
 source(file = "functions.R")
@@ -483,25 +503,87 @@ imdb_df <- movies_df %>%
   select(-tmdbId) %>%
   mutate(link = paste0(imdb_url, imdbId))
 
-# Quick check
+# Quick check for Toy Story and Star Wars V
 get_cast(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0076759"))
 get_budget(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0076759"))
 get_director(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0076759"))
 get_time(c("http://www.imdb.com/title/tt0114709", "http://www.imdb.com/title/tt0076759"))
 ```
+Ok, looks like it works! We can now download the data for the whole `imdb_df` data frame.
 
-
-```{r, eval=F}
-system.time({
-imdb_df1 <- imdb_df %>%
-  top_n(1) %>%
+```{r, eval=FALSE}
+imdb_df <- imdb_df %>%
   mutate(time = get_time(link)) %>%
   mutate(director = get_director(link)) %>%
-  mutate(budget = get_budget(link)) %>% # Will be sparse. Or not?
+  mutate(budget = get_budget(link)) %>%
   mutate(cast = get_cast(link))
-})
+```
+```{r, echo=F}
+imdb_df <- read_csv('imdb_df.csv')
+```
+Finally, we'll add `score` column from the `avg_rating` data frame.
+```{r}
+imdb_df <- imdb_df %>%
+  inner_join(avg_rating, by = c('movieId', 'title', 'year')) %>%
+  select(-min, -max, -genres, -count)
 ```
 
 ### Does a movie budget affect its score?
+```{r q6}
+imdb_df %>%
+  #filter(budget < 1e10) %>%
+  ggplot(aes(x=log(budget), y=score)) +
+    geom_point(color="blue")
+
+# check correlation coefficient
+cor(imdb_df$budget, imdb_df$score, use = "na.or.complete")
+```
+
+The scatterplot doesn't show any particular pattern and the correlation coefficient is close to 0. If it's not the moeny then what is it?
+
+### What is the optimal movie running time?
+```{r q7}
+imdb_df %>%
+  filter(time < 200) %>%
+  ggplot(aes(x=time, y=score)) +
+    geom_point(color="blue")
+
+# check correlation coefficient
+#cor(imdb_df$budget, imdb_df$score, use = "na.or.complete")
+```
+
+Interesting. We can see a triangular shape suggesting that longer movies are less likely to get low score. There is also a suggestion that very short movies tend to score higher.
+
+### Who is the best movie director?
+```{r}
+best_director <- imdb_df %>%
+  inner_join(movies_df, by = "movieId") %>%
+  na.omit() %>%
+  select(director, score, mean) %>%
+  separate_rows(director, sep = "\\|") %>%
+  group_by(director) %>%
+  summarise(count = n(), avg_rating = mean(mean)) %>%
+  mutate(score = ci_lower(avg_rating/5, count, 0.95)) %>%
+  filter(count > 3) %>%
+  arrange(desc(score), count)
+
+print(best_director)
+```
+
+### What cast is the ultimate movie cast?
+```{r}
+best_cast <- imdb_df %>%
+  inner_join(movies_df, by = "movieId") %>%
+  na.omit() %>%
+  select(cast, score, mean) %>%
+  separate_rows(cast, sep = "\\|") %>%
+  group_by(cast) %>%
+  summarise(count = n(), avg_rating = mean(mean)) %>%
+  mutate(score = ci_lower(avg_rating/5, count, 0.95)) %>%
+  filter(count > 3) %>%
+  arrange(desc(score), count)
+
+print(best_cast)
+```
 
 ## Conclusion
