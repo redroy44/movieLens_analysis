@@ -10,21 +10,21 @@ knitr::opts_chunk$set(echo = TRUE, message=F, warning=F, cache=T)
 
 ## Introduction
 
-> Note: The sources are available [here](https://github.com/redroy44/movieLens_analysis).
+> The sources are available [here](https://github.com/redroy44/movieLens_analysis).
 
-This is a report on the movieLens dataset available [here](https://grouplens.org/datasets/movielens/). MovieLens itself is a research site run by GroupLens Research group at the University of Minnesota. An interesting thing to notice is that the first automated recommender system was developed there in 1993.
+This is a report on the movieLens dataset available [here](https://grouplens.org/datasets/movielens/). MovieLens itself is a research site run by GroupLens Research group at the University of Minnesota. The first automated recommender system was developed there in 1993.
 
 ### Objectives
 
-The movieLens dataset is most often used for the purpose of recommender systems. Their purpose is to predict user movie ratings based on other users' ratings. In other words we expect that user with similar taste will tend to rate movies with high correlation. 
+The movieLens dataset is most often used for the purpose of recommender systems which aim to predict user movie ratings based on other users' ratings. In other words we expect that users with similar taste will tend to rate movies with high correlation. 
 
 However, in this analysis we will try to explore the movies themselves. Hopefully it will give us an interesting insight into the history of cinematography.
 
 ### Packages used
 
-For this analysis the Microsoft R Open distribution was used. The reason for this was its multithreaded performance as described [here](https://mran.microsoft.com/documents/rro/multithread/). Most of the packages that were used come from the [tidyverse](http://tidyverse.org/) - a collection of packages that share common philosophies of tidy data. The tidytext and wordcloud packages were used for some text processing. Finally the doMC package was used to embrace the multithreading in some of the custom functions which will be described later. 
+For this analysis the Microsoft R Open distribution was used. The reason for this was its multithreaded performance as described [here](https://mran.microsoft.com/documents/rro/multithread/). Most of the packages that were used come from the [tidyverse](http://tidyverse.org/) - a collection of packages that share common philosophies of tidy data. The `tidytext` and `wordcloud` packages were used for some text processing. Finally, the `doMC` package was used to embrace the multithreading in some of the custom functions which will be described later. 
 
-> Note: doMC package is not available on Windows. Use doParallel package instead.
+> doMC package is not available on Windows. Use doParallel package instead.
 
 ```{r packages, results='hide'}
 # Load the packages -------------------------------------------------------
@@ -39,10 +39,10 @@ library(tidytext)
 library(wordcloud)
 library(doMC)
 registerDoMC()
-set.seed(29082012)
+set.seed(1234)
 ```
 
-The output of sessionInfo() is placed here for reproducibility purposes.
+The output of `sessionInfo()` is placed here for reproducibility purposes.
 ```{r, echo=T}
 # Print Session Information
 sessionInfo()
@@ -50,13 +50,12 @@ sessionInfo()
 
 ## Dataset Description
 
-The dataset is avaliable in several snapshots. The ones that were used in this analysis were Latest Datasets - both full and small (for testing purposes). They were last updated in October 2016.
+The dataset is avaliable in several snapshots. The ones that were used in this analysis were Latest Datasets - both full and small (for web scraping). They were last updated in October 2016.
 
-First the data was automatically downloaded and unzipped. 
 
 ###Dataset Download
 
-First the data was automatically downloaded and unzipped. Although it is generally done only once during the analysis, it makes the reproducibility so much easier and less painful.
+First the data needs to be downloaded and unzipped. Although it is generally done only once during the analysis, it makes the reproducibility so much easier and less painful.
 
 ```{r, echo=T}
 url <- "http://files.grouplens.org/datasets/movielens/"
@@ -78,9 +77,10 @@ unzip(file.path(data_folder, dataset_zip), exdir = data_folder, overwrite = F)
 # Display the unzipped files
 list.files('data/', recursive=T)
 ```
+
 ### Loading the Dataset
 
-The dataset is split into four files (genome-scores.csv and genome-tags.csv were omitted for this analysis)- movies.csv, ratings.csv, links.csv and tags.csv. We will iteratively load the files into the workspace using read_csv() function and assign variable names accordingly. The read_csv() function is very convenient because it automagically guesses column types based on the first thousand rows. And more importantly it never converts strings to factors. Never. 
+The dataset is split into four files (genome-scores.csv and genome-tags.csv were omitted for this analysis)- movies.csv, ratings.csv, links.csv and tags.csv. We will iteratively load the files into the workspace using `read_csv()` function and assign variable names accordingly. The `read_csv()` function is very convenient because it automagically guesses column types based on the first 1000 rows. And more importantly it never converts strings to factors. Never. 
 
 Finally we will check object sizes to see how big is the dataset.
 ```{r, echo=T}
@@ -94,7 +94,7 @@ for (f in dataset_files) {
 }
 ```
 
-The biggest data frame is ratings - it contains movie ratings from movieLens users. Next we will see what kind of data we deal with.
+The biggest data frame is ratings - 465.5 Mb - it contains movie ratings from movieLens users. Next we will see what kind of data we deal with.
 
 ## Data Cleaning
 
@@ -105,7 +105,7 @@ In this section we will take the first look at the loaded data frames. We will a
 glimpse(ratings)
 ```
 
-We have 24 millions rows and 4 columns. It seems that only timestamp column need to be parsed. We will create new data frame that we will work on and preserve the original data frame (treat it as read-only).
+We have 24 million rows and 4 columns. It seems that only timestamp column need to be converted. We will create new data frame that we will work on and preserve the original data frame (treat it as read-only).
 
 ```{r}
 ratings_df <- ratings %>%
@@ -119,26 +119,33 @@ Ok, looks like there is no missing data. We can also see that the ratings range 
 ```{r}
 glimpse(movies)
 ```
-There are 40 thousand movies and 3 columns. Most of the movies have their debut year added to their names - we want to extract this into separate columns. Genres columns contains multiple categories per row - we want to have them separated into one category per row. We will deal with this later.
+There are over 40 thousand movies and 3 columns. Most of the movies have their debut year added to their names - we want to extract this into separate columns. Genres columns contains multiple categories per row - we want to have them separated into one category per row. We will deal with this later.
 ```{r warning=T}
 movies_df <- movies %>%
-  mutate(title = str_trim(title)) %>% # trim whitespaces
-  extract(title, c("title_tmp", "year"), regex = "^(.*) \\(([0-9 \\-]*)\\)$", remove = F) %>% # split title to title, year
-  mutate(year = if_else(str_length(year) > 4, as.integer(str_split(year, "-", simplify = T)[1]), as.integer(year))) %>% # for series take debut date
-  mutate(title = if_else(is.na(title_tmp), title, title_tmp)) %>% # replace title NA's with original title
-  select(-title_tmp)  %>%# drop title_tmp column
-  mutate(genres = if_else(genres == "(no genres listed)", `is.na<-`(genres), genres)) # generic function to turn (no genres listed) to NA
+  # trim whitespaces
+  mutate(title = str_trim(title)) %>%
+  # split title to title, year
+  extract(title, c("title_tmp", "year"), regex = "^(.*) \\(([0-9 \\-]*)\\)$", remove = F) %>%
+  # for series take debut date
+  mutate(year = if_else(str_length(year) > 4, as.integer(str_split(year, "-", simplify = T)[1]), as.integer(year))) %>%
+  # replace title NA's with original title
+  mutate(title = if_else(is.na(title_tmp), title, title_tmp)) %>%
+  # drop title_tmp column
+  select(-title_tmp)  %>%
+  # generic function to turn (no genres listed) to NA
+  mutate(genres = if_else(genres == "(no genres listed)", `is.na<-`(genres), genres))
 ```
-Here we extracted the movie debut year using extract() function from tidyr package. For the case of movie series where year has "yyyy-yyyy" format we take the first date. In the last line we replaced the string "(no genres listed)" with NA value to make further processing easier.
 
-The warnings() functions returned a message that some missing values appeared. 
+Here we extracted the movie debut year using `extract()` function from `tidyr` package. For the case of movie series where year has "yyyy-yyyy" format we take the first date. In the last line we replaced the string *"(no genres listed)"* with `NA` value to make further processing easier. There are also some warnings suggesting that missing values appeared. We'll check that now.
 
 ```{r}
 # Check NA's
 na_movies <- movies_df %>%
-  filter(is.na(title) | is.na(year)) %>%
-  print
+  filter(is.na(title) | is.na(year))
+
+knitr::kable(head(na_movies, 10))
 ```
+
 Seems that warnings appeared, because some of the movies do not have their debut year. We will ignore those movies in further analysis as there aren't many of them.
 
 ```{r}
@@ -149,7 +156,8 @@ Let's check the tags data frame now.
 ```{r}
 glimpse(tags)
 ```
-Seems that only timestamp needs to be parsed.
+
+Seems that only timestamp needs to be converted.
 ```{r}
 tags_df <- tags %>%
   mutate(timestamp = as_datetime(timestamp))
@@ -170,10 +178,10 @@ Ok, we are now done with data cleaning. Let's go deeper into the data exploratio
 
 ## Data Exploration
 
-In this part we will try to explore the dataset and reveal some interesting facts about cinematography.
+In this part we will try to explore the dataset and reveal some interesting facts about the movie business.
 
 ### How many movies were produced per year?
-The first question that may be asked is how many movies were produced year by year. We can easily extract this information from the movies_df data frame.
+The first question that may be asked is how many movies were produced year by year. We can easily extract this information from the `movies_df` data frame.
 ```{r q1-1}
 # Number of movies per year/decade
 movies_per_year <- movies_df %>%
@@ -181,15 +189,18 @@ movies_per_year <- movies_df %>%
   select(movieId, year) %>% # select columns we need
   group_by(year) %>% # group by year
   summarise(count = n())  %>% # count movies per year
-  arrange(count) %>%
-  print()
+  arrange(year)
+
+knitr::kable(head(movies_per_year, 10))
 ```
-There are some years that are missing, probably there were no movies produced in the early years. We can easily fix missing values using complete() function from the tidyr package.
+
+There are some years that are missing, probably there were no movies produced in the early years. We can easily fix missing values using `complete()` function from the `tidyr` package.
 ```{r}
 # fill missing years
 movies_per_year <- movies_per_year %>%
-  complete(year = full_seq(year, 1), fill = list(count = 0)) %>%
-  print()
+  complete(year = full_seq(year, 1), fill = list(count = 0))
+
+knitr::kable(head(movies_per_year, 10))
 ```
  
  That's better. Now let's plot what we have.
@@ -199,7 +210,7 @@ movies_per_year %>%
   geom_line(color="blue")
 ```
 
-We can see an exponential growth in the '90s and a sudden drop in 2016. The latter is caused by the fact that the data is collected until October 2016 so we don't have the full data on this year. As for the former, perhaps it was somewhat linked to the beginning of the information era. Growing popularity of the Internet must have had a positive impact on the demand for movies. That is certainly something worthy of further analysis.
+We can see an exponential growth of the movie business and a sudden drop in 2016. The latter is caused by the fact that the data is collected until October 2016 so we don't have the full data on this year. As for the former, perhaps it was somewhat linked to the beginning of the information era. Growing popularity of the Internet must have had a positive impact on the demand for movies. That is certainly something worthy of further analysis.
 
 
 ### What were the most popular movie genres year by year?
@@ -210,8 +221,9 @@ genres_df <- movies_df %>%
   separate_rows(genres, sep = "\\|") %>%
   group_by(genres) %>%
   summarise(number = n()) %>%
-  arrange(desc(number)) %>%
-  print()
+  arrange(desc(number))
+
+knitr::kable(head(genres_df, 10))
 ```
 
 No suprise here. Dramas and comedies are definitely the most popular genres.
@@ -227,7 +239,8 @@ genres_popularity <- movies_df %>%
   summarise(number = n()) %>% # count
   complete(year = full_seq(year, 1), genres, fill = list(number = 0)) # add missing years/genres
 ```
-Now we are able to plot the data. For readability I chose 4 genres: animation, sci-fi, war and western movies.
+
+Now we are able to plot the data. For readability we choose 4 genres: animation, sci-fi, war and western movies.
 ```{r q2-2, results=F, echo=F}
 # Most popular genres
 genres_top <- genres_popularity %>%
@@ -246,10 +259,11 @@ genres_popularity %>%
     scale_fill_brewer(palette = "Paired") 
 ```
 
-Here we have some interesting observations. First we can notice a rapid growth of sci-fi movies shortly after 1969, the year of the first Moon landing. Secondly we high number of westerns in 1950s and 1960s that was the time when westerns popularity was peaking. Nest we can see the rise of popularity of animated movies, the most probable reason might be the computer animation technology advancement which made the production much easier. War movies were popular around the time when big miliraty conflicts occured - World War II, Vietnam War and most recently War in Afghanistan and Iraq. It interesting to see how the world of cinematography reflected the state of the real world.
+Here we have some interesting observations. First we can notice a rapid growth of sci-fi movies shortly after 1969, the year of the first Moon landing. Secondly, we notice high number of westerns in 1950s and 1960s that was the time when westerns popularity was peaking. Next, we can see the rise of popularity of animated movies, the most probable reason might be the computer animation technology advancement which made the production much easier. War movies were popular around the time when big military conflicts occured - World War II, Vietnam War and most recently War in Afghanistan and Iraq. It's interesting to see how the world of cinematography reflected the state of the real world.
 
 
 ### What tags best summarize a movie genre? {.tabset .tabset-fade .tabset-pills}
+
 Looking at how each movie genre is tagged by users is a great way to see if a movie genre can be described using just a few words. We'll explore a selection of movie genres and see if anything interesting pops out.
 
 ```{r q3-1}
@@ -264,7 +278,7 @@ genres_tags <- movies_df %>%
   nest()
 ```
 
-Click on a tab to see a tagcloud for a selected genre.
+We'll leave drawing conclusiong to you - the reader. Try looking not only for some interesting keywords, but also actor or director names - that may give indication of who is associated to the whole genre. Click on a tab to see a tagcloud for a selected genre.
 
 #### Action
 
@@ -282,7 +296,6 @@ genre_words <- genres_tags %>%
 
 ```
 
-<!-- Looks like action movies involve sci-fi dystopic world where a superhero is needed. We can also see Bruce Willis and Harrison Ford as synonyms for the genre, well you can't argue with that. -->
 
 #### Comedy
 
@@ -300,10 +313,8 @@ genre_words <- genres_tags %>%
 
 ```
 
-<!-- The most popular comedy would a dark/black comedy that is quirky, satiric and takes place in high school. We can also see Bill Murray, Tom Hanks and Jim Carrey as actors who characterize the genre. -->
 
 #### Drama
-<!-- throw out -->
 ```{r q3-4}
 # plot wordcloud per genre
 genre<-"Drama"
@@ -317,7 +328,6 @@ genre_words <- genres_tags %>%
   wordcloud(genre_words$tag, genre_words$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
 
 ```
-
 
 
 #### Thriller
@@ -336,7 +346,6 @@ genre_words <- genres_tags %>%
 
 ```
 
-<!-- Looks like the best thriller would be full of action and violence, starring Brruce Willis and Brad Pitt nad taking place in a surreal, sci-fi reality. -->
 
 #### Horror
 
@@ -354,7 +363,6 @@ genre_words <- genres_tags %>%
 
 ```
 
-<!-- What is a recipe for a good horror? Serial killers and aliens in a post-apocalyptic world. With a plot containing a lot of suspension, twist ending with a hint of nudity. -->
 
 #### Children
 
@@ -372,7 +380,6 @@ genre_words <- genres_tags %>%
 
 ```
 
-<!-- As for chldren movies, we can see that the genre is dominated by Disney and Pixar companies. Most children movies include funny talking animals and are based on books. -->
 
 #### Crime
 
@@ -390,10 +397,8 @@ genre_words <- genres_tags %>%
 
 ```
 
-<!-- Crime movies are often related to comedies and as expected they often end with a plot twist. -->
 
 #### Romance
-<!-- throw out -->
 ```{r q3-9}
 # plot wordcloud per genre
 genre<-"Romance"
@@ -410,9 +415,11 @@ genre_words <- genres_tags %>%
 
 
 ### What were the best movies of every decade (based on users' ratings)?
+
+We may wish to see what were the highest rated movies in every decade. First, let's find average score for each movie.
+
 ```{r q4}
 # average rating for a movie
-
 avg_rating <- ratings_df %>%
   inner_join(movies_df, by = "movieId") %>%
   na.omit() %>%
@@ -420,33 +427,42 @@ avg_rating <- ratings_df %>%
   group_by(movieId, title, year) %>%
   summarise(count = n(), mean = mean(rating), min = min(rating), max = max(rating)) %>%
   ungroup() %>%
-  arrange(count, desc(mean))
+  arrange(desc(mean))
+
+knitr::kable(head(avg_rating, 10))
 ```
 
+That doesn't look too good. If we sort by average score our ranking will be polluted by movies with low count of reviews. To deal with this issue we will use a weighted average used on IMDB website for their Top 250 ranking. Head [here](https://districtdatalabs.silvrback.com/computing-a-bayesian-estimate-of-star-rating-means) for more details.
+
 ```{r, warning=T, message=T}
-# Lower bound of Wilson score confidence interval for a Bernoulli parameter
-# http://www.evanmiller.org/how-not-to-sort-by-average-rating.html
-# movies with the same mean but more reviews get higher score
-ci_lower <- function(pos, n, confidence) {
-  z = qnorm(1-(1-confidence)/2)
-  phat = pos
-  return (phat + z*z/(2*n) - z * sqrt((phat*(1-phat)+z*z/(4*n))/n))/(1+z*z/n)
+# R = average for the movie (mean) = (Rating)
+# v = number of votes for the movie = (votes)
+# m = minimum votes required to be listed in the Top 250
+# C = the mean vote across the whole report
+weighted_rating <- function(R, v, m, C) {
+  return (v/(v+m))*R + (m/(v+m))*C
 }
 
 avg_rating <- avg_rating %>%
-  mutate(score = ci_lower(mean/5, count, 0.95)) %>%
-  arrange(desc(score))
+  mutate(wr = weighted_rating(mean, count, 500, mean(mean))) %>%
+  arrange(desc(wr))
 
+knitr::kable(head(avg_rating, 10))
+```
+
+That's better. Movies with more good reviews got higher score. Now let's findthe best movie for every decade since the beginning of cinematography.
+```{r}
 # find best movie of a decade based on score
 # heavily dependent on the number of reviews
 best_per_decade <- avg_rating %>%
-  filter(count > 3) %>% # at least the median number of reviews (3)
   mutate(decade = year  %/% 10 * 10) %>%
-  arrange(year, desc(score)) %>%
+  arrange(year, desc(wr)) %>%
   group_by(decade) %>%
-  summarise(title = first(title), score = first(score), mean = first(mean), count = first(count))
-  print(best_per_decade)
+  summarise(title = first(title), wr = first(wr), mean = first(mean), count = first(count))
+knitr::kable(best_per_decade)
 ```
+
+Here we can notice the disadvantage of weighted ratings - low score for old movies. That's not necessarily caused by movies quality, rather small number of viewers. 
 
 ### What were the best years for a genre (based on users' ratings)?
 ```{r q5-1}
@@ -460,21 +476,23 @@ genres_rating <- movies_df %>%
   group_by(year, genres) %>%
   summarise(count = n(), avg_rating = mean(rating)) %>%
   ungroup() %>%
-  mutate(score = ci_lower(avg_rating/5, count, 0.95)) %>%
+  mutate(wr = weighted_rating(mean, count, 5000, mean(mean))) %>%
   arrange(year)
 ```
 ```{r q5-2}
 genres_rating %>%
   #filter(genres %in% genres_top$genres) %>%
   filter(genres %in% c("Action", "Romance", "Sci-Fi", "Western")) %>%
-  ggplot(aes(x = year, y = score)) +
+  ggplot(aes(x = year, y = wr)) +
     geom_line(aes(group=genres, color=genres)) +
     geom_smooth(aes(group=genres, color=genres)) +
     facet_wrap(~genres)
 ```
 
+It seems that most of the movie genres are actually getting better and better.
+
 ## Web Scraping
-In the final part of the dataset exploration I used a handful of functions for performing web scraping from IMDB website using the data from links data frame. 
+In the final part of the dataset exploration we will use a handful of functions for performing web scraping from IMDB website using the data from links data frame. 
 An example function looks like the one below. The `%dopar%` operator enables parallel processing that greatly speeds up the computations.
 ```{r, eval=F}
 # Get movie cast ----------------------------------------------------------
@@ -491,7 +509,7 @@ get_cast <- function(link) {
 }
 ```
 
-Next, we'll prepare a new data frame that will contain explicit links to imdb website and run basic tests to verify if the functions work.
+Next, we'll prepare a new data frame that will contain explicit links to IMDB website and run basic tests to verify if the functions work.
 ```{r , results='hold'}
 # source utility functions
 source(file = "functions.R")
@@ -521,7 +539,8 @@ imdb_df <- imdb_df %>%
 ```{r, echo=F}
 imdb_df <- read_csv('imdb_df.csv')
 ```
-Finally, we'll add `score` column from the `avg_rating` data frame.
+Finally, we'll add `wr` column from the `avg_rating` data frame and explore the data in the next section.
+
 ```{r}
 imdb_df <- imdb_df %>%
   inner_join(avg_rating, by = c('movieId', 'title', 'year')) %>%
@@ -532,58 +551,64 @@ imdb_df <- imdb_df %>%
 ```{r q6}
 imdb_df %>%
   #filter(budget < 1e10) %>%
-  ggplot(aes(x=log(budget), y=score)) +
+  ggplot(aes(x=log(budget), y=wr)) +
     geom_point(color="blue")
 
 # check correlation coefficient
-cor(imdb_df$budget, imdb_df$score, use = "na.or.complete")
+cor(imdb_df$budget, imdb_df$wr, use = "na.or.complete")
 ```
 
-The scatterplot doesn't show any particular pattern and the correlation coefficient is close to 0. If it's not the moeny then what is it?
+The scatterplot doesn't show any particular pattern and the correlation coefficient is close to 0. If it's not the money then perhaps it is the running time?
 
 ### What is the optimal movie running time?
 ```{r q7}
 imdb_df %>%
   filter(time < 200) %>%
-  ggplot(aes(x=time, y=score)) +
+  ggplot(aes(x=time, y=wr)) +
     geom_point(color="blue")
 
-# check correlation coefficient
-#cor(imdb_df$budget, imdb_df$score, use = "na.or.complete")
 ```
 
-Interesting. We can see a triangular shape suggesting that longer movies are less likely to get low score. There is also a suggestion that very short movies tend to score higher.
+Interesting. We can see a triangular shape suggesting that longer movies are less likely to get low score. The scores for short movies look pretty random.
 
 ### Who is the best movie director?
+
+Now, that we have the list of mvie directors we can trace the directors whose movies get the best ratings.
 ```{r}
 best_director <- imdb_df %>%
   inner_join(movies_df, by = "movieId") %>%
   na.omit() %>%
-  select(director, score, mean) %>%
+  select(director, wr, mean) %>%
   separate_rows(director, sep = "\\|") %>%
   group_by(director) %>%
   summarise(count = n(), avg_rating = mean(mean)) %>%
-  mutate(score = ci_lower(avg_rating/5, count, 0.95)) %>%
-  filter(count > 3) %>%
-  arrange(desc(score), count)
+  mutate(wr = weighted_rating(mean, count, 30, mean(mean))) %>%
+  arrange(desc(wr), count)
 
-print(best_director)
+knitr::kable(head(best_director, 10))
 ```
+
+Looks like Woody Allen is on the top here. What about the best actor?
 
 ### What cast is the ultimate movie cast?
 ```{r}
 best_cast <- imdb_df %>%
   inner_join(movies_df, by = "movieId") %>%
   na.omit() %>%
-  select(cast, score, mean) %>%
+  select(cast, wr, mean) %>%
   separate_rows(cast, sep = "\\|") %>%
   group_by(cast) %>%
   summarise(count = n(), avg_rating = mean(mean)) %>%
-  mutate(score = ci_lower(avg_rating/5, count, 0.95)) %>%
-  filter(count > 3) %>%
-  arrange(desc(score), count)
+  mutate(wr = weighted_rating(mean, count, 30, mean(mean))) %>%
+  arrange(desc(wr), count)
 
-print(best_cast)
+knitr::kable(head(best_cast, 10))
 ```
 
+Robert De Niro is the highest scoring actor. Perhaps he should talk to Woody Allen about making the best movie in history?
+
 ## Conclusion
+
+Analysing the movieLens dataset gave many interesting insights into the movie business. Although it is mainly used for recommendation systems we were still able to extract some trends in the data. With web scraping methods the dataset could be easily entended to provide even more interesting observations. Overall, it was an interesting dataset to analyze that allowed using even more interesting R packages & features.
+
+Again, you can find source files [here](https://github.com/redroy44/movieLens_analysis).
